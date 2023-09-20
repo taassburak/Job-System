@@ -8,6 +8,8 @@ using Unity.Burst;
 [RequireComponent(typeof(MeshFilter))]
 public class MeshManager : MonoBehaviour
 {
+    [SerializeField] private JobManager _jobManager;
+    private JobType _jobType => _jobManager.JobType;
 
     [SerializeField] private Vector3 _rippleOrigin;
 
@@ -35,40 +37,74 @@ public class MeshManager : MonoBehaviour
     [BurstCompile]
     void Update()
     {
-        //for (int i = 0; i < _verticesArray.Length; i++)
-        //{
-        //    Vector3 originalVertex = _verticesArray[i];
-        //    float distance = Vector3.Distance(originalVertex, _rippleOrigin);
-        //    float rippleAmount = Mathf.Sin(distance - Time.time);
-        //    Vector3 offset = (originalVertex - _rippleOrigin).normalized * rippleAmount;
-        //    Vector3 newPos = originalVertex + offset;
-
-        //    _newVerticesArray[i] = newPos;
-        //}
-
-        //_mesh.SetVertices(_newVerticesArray);
-
-        DeformMeshJob deformJob = new DeformMeshJob()
+        if (_jobType == JobType.NoJob)
         {
-            OriginalVertices = _verticesNativeArray,
-            RipplePosition = _rippleOrigin,
-            DeltaTime = Time.time,
 
-            NewVertices = _newVerticesNativeArray,
+            for (int i = 0; i < _verticesArray.Length; i++)
+            {
+                Vector3 originalVertex = _verticesArray[i];
+                float distance = Vector3.Distance(originalVertex, _rippleOrigin);
+                float rippleAmount = Mathf.Sin(distance - Time.time);
+                Vector3 offset = (originalVertex - _rippleOrigin).normalized * rippleAmount;
+                Vector3 newPos = originalVertex + offset;
 
-        };
+                _newVerticesArray[i] = newPos;
+            }
+
+            _mesh.SetVertices(_newVerticesArray);
+        }
+
+        else if (_jobType == JobType.ParallelJob)
+        {
+
+            DeformMeshJob deformJob = new DeformMeshJob()
+            {
+                OriginalVertices = _verticesNativeArray,
+                RipplePosition = _rippleOrigin,
+                DeltaTime = Time.time,
+
+                NewVertices = _newVerticesNativeArray,
+
+            };
 
 
-        JobHandle deformJobHandle = deformJob.Schedule(_verticesArray.Length, 1);
-        
-        Debug.Log("Schedule Completed");
+            JobHandle deformJobHandle = deformJob.Schedule(_verticesArray.Length, 1);
 
-        deformJobHandle.Complete();
+            Debug.Log("Schedule Completed");
 
-        _mesh.SetVertices(deformJob.NewVertices);
+            deformJobHandle.Complete();
+
+            _mesh.SetVertices(deformJob.NewVertices);
+
+
+        }
+        else
+        {
+
+            DeformMeshJobIJob deformJob = new DeformMeshJobIJob()
+            {
+                OriginalVertices = _verticesNativeArray,
+                RipplePosition = _rippleOrigin,
+                DeltaTime = Time.time,
+
+                NewVertices = _newVerticesNativeArray,
+
+            };
+
+
+            JobHandle deformJobHandle = deformJob.Schedule();
+
+            Debug.Log("Schedule Completed");
+
+            deformJobHandle.Complete();
+
+            _mesh.SetVertices(deformJob.NewVertices);
+
+        }
 
         //_newVerticesNativeArray.Dispose();
         //_verticesNativeArray.Dispose();
+
     }
 
 }
